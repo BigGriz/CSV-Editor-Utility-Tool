@@ -75,6 +75,7 @@ public class GUITable : EditorWindow
         GUI.DrawTexture(tableSection, tableSectionTexture);
     }
 
+    public bool doOnce = false;
 
     void DrawHeader()
     {
@@ -92,7 +93,10 @@ public class GUITable : EditorWindow
         {
             OpenFile();
         }
-
+        if (GUILayout.Button("Load"))
+        {
+            LoadTable();
+        }
         if (GUILayout.Button("Save"))
         {
             SaveTableAsText();
@@ -103,10 +107,23 @@ public class GUITable : EditorWindow
         GUILayout.EndArea();
     }
 
+    void LoadTable()
+    {
+        // Get # of lines in File, setup empty array of lists
+        table = new List<string>[CSVReader.GetLines(AssetDatabase.GetAssetPath(source))];
+        for (int i = 0; i < CSVReader.GetLines(AssetDatabase.GetAssetPath(source)); i++)
+        {
+            table[i] = new List<string>();
+        }
+
+        loaded = true;
+        CSVReader.LoadFromFile(AssetDatabase.GetAssetPath(source), new CSVReader.ReadLineDelegate(TableAttempt));
+    }
+
     void DrawTable()
     {
         // Check CSV file is loaded
-        if (source)
+        if (source && loaded)
         {
             GUILayout.BeginArea(tableSection);
 
@@ -125,6 +142,10 @@ public class GUITable : EditorWindow
             }
 
             GUILayout.EndArea();
+        }
+        else
+        {
+            loaded = false;
         }
     }
     
@@ -149,24 +170,48 @@ public class GUITable : EditorWindow
     #region OpenFile & Save
     public StreamWriter outStream;
     public string path;
+
+    public bool loaded = false;
+
     private void SaveText(int line_index, List<string> line)
     {
+        string temp = "";
+
         for (int i = 0; i < line.Count; i++)
         {
-            outStream.WriteLine(line[i]);
+            if (i != line.Count - 1)
+            {
+                temp += line[i] + ",";
+            }
+            else
+            {
+                temp += line[i];
+            }
         }
+        outStream.WriteLine(temp);
     }
 
     private void SaveTableAsText()
     {
         // Save file for reading/writing
         outStream = File.CreateText(path);
+
         for (int i = 0; i < table.Length; i++)
         {
+            string temp = "";
             for (int j = 0; j < table[i].Count; j++)
             {
-                outStream.WriteLine(table[i][j]);
+                if (j != table[i].Count - 1)
+                {
+                    temp += table[i][j] + ",";
+                }
+                else
+                {
+                    temp += table[i][j];
+                }
+                
             }
+            outStream.WriteLine(temp);
         }
         outStream.Close();
     }
@@ -203,6 +248,7 @@ public class GUITable : EditorWindow
                 outStream.Close();
                 // Load the Resource
                 source = Resources.Load<TextAsset>(endName);
+                loaded = true;
             }
         }
     }
