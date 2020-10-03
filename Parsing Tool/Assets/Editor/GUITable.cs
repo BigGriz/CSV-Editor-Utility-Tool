@@ -1,0 +1,210 @@
+﻿using System;
+using System.Linq;
+using System.IO;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+public class GUITable : EditorWindow
+{
+    // DataSheet Reference
+    public UnityEngine.Object source;
+    // Data Section Styling
+    Texture2D dataSectionTexture;
+    Rect dataSection;
+    Color dataSectionColor = new Color(0.22f, 0.22f, 0.22f, 1);
+    // Table Section Styling
+    Texture2D tableSectionTexture;
+    Rect tableSection;
+    Color tableSectionColor = new Color(0.0f, 0.0f, 0.0f, 1);
+
+    [MenuItem("CSV Tool/Open _%#T")]
+    public static void ShowWindow()
+    {
+        // Reference to new Window
+        var window = GetWindow<GUITable>();
+        // Set Title & Size
+        window.titleContent = new GUIContent("CSV Tool");
+        window.minSize = new Vector2(274, 50);
+    }
+    // Setup
+    private void OnEnable()
+    {      
+        SetupHeader();
+        SetupTable();
+    }
+    void SetupHeader()
+    {
+        // Header
+        dataSectionTexture = new Texture2D(1, 1);
+        dataSectionTexture.SetPixel(0, 0, dataSectionColor);
+        dataSectionTexture.Apply();
+    }
+    void SetupTable()
+    {
+        // Header
+        tableSectionTexture = new Texture2D(1, 1);
+        tableSectionTexture.SetPixel(0, 0, tableSectionColor);
+        tableSectionTexture.Apply();
+    }
+
+    // Update
+    private void OnGUI()
+    {
+        DrawLayouts();
+        DrawHeader();
+
+        DrawTable();
+    }
+
+    // Define Rect Values
+    void DrawLayouts()
+    {
+        dataSection.x = 2;
+        dataSection.y = 0;
+        dataSection.width = 270.0f;
+        dataSection.height = 50.0f;
+        GUI.DrawTexture(dataSection, dataSectionTexture);
+
+        tableSection.x = 272;
+        tableSection.y = 52;
+        tableSection.width = Screen.width - tableSection.x - 2;
+        tableSection.height = 500.0f;
+        GUI.DrawTexture(tableSection, tableSectionTexture);
+    }
+
+
+    void DrawHeader()
+    {
+        // basically start working in this gui area
+        GUILayout.BeginArea(dataSection);
+
+        EditorGUILayout.BeginHorizontal();
+        GUILayout.Label("DataSheet");
+        source = EditorGUILayout.ObjectField(source, typeof(TextAsset), true, GUILayout.Width(150));
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        // OpenFile Button
+        if (GUILayout.Button("Open"))
+        {
+            OpenFile();
+        }
+
+        if (GUILayout.Button("Save"))
+        {
+            SaveTableAsText();
+        }
+        EditorGUILayout.EndHorizontal();
+
+        // stop working in this gui area
+        GUILayout.EndArea();
+    }
+
+    void DrawTable()
+    {
+        // Check CSV file is loaded
+        if (source)
+        {
+            GUILayout.BeginArea(tableSection);
+
+            float width = 150;
+
+            for (int i = 0; i < table.Length; i++)
+            {
+                GUILayout.BeginHorizontal();
+
+                for (int j = 0; j < table[i].Count; j++)
+                {
+                    table[i][j] = GUILayout.TextField(table[i][j], GUILayout.Width(width / table[i].Count));
+                }
+
+                GUILayout.EndHorizontal();
+            }
+
+            GUILayout.EndArea();
+        }
+    }
+    
+    void TableAttempt(int line_index, List<string> line)
+    {
+        for (int i = 0; i < line.Count; i++)
+        {
+            if (table[line_index].Count <= i)
+            {
+                table[line_index].Add(line[i]);
+            }
+            else
+            {
+                table[line_index][i] = line[i];
+            }
+        }
+    }
+
+    // Table Container
+    public List<string>[] table;
+
+    #region OpenFile & Save
+    public StreamWriter outStream;
+    public string path;
+    private void SaveText(int line_index, List<string> line)
+    {
+        for (int i = 0; i < line.Count; i++)
+        {
+            outStream.WriteLine(line[i]);
+        }
+    }
+
+    private void SaveTableAsText()
+    {
+        // Save file for reading/writing
+        outStream = File.CreateText(path);
+        for (int i = 0; i < table.Length; i++)
+        {
+            for (int j = 0; j < table[i].Count; j++)
+            {
+                outStream.WriteLine(table[i][j]);
+            }
+        }
+        outStream.Close();
+    }
+
+    private void OpenFile()
+    {
+        var filePath = EditorUtility.OpenFilePanel("level", Application.streamingAssetsPath, "csv");
+        if (filePath.Length != 0)
+        {
+            if (filePath.EndsWith(".csv"))
+            {
+                // Get FilePath & Save Location
+                string fullPath = Path.GetFullPath(filePath).TrimEnd(Path.DirectorySeparatorChar);
+                string fileName = fullPath.Split(Path.DirectorySeparatorChar).Last();
+                string endName = Path.GetFileNameWithoutExtension(filePath);
+                string savePath = Application.dataPath + "/Resources/";
+
+
+                // Save file for reading/writing
+                path = savePath + endName + ".txt";
+                outStream = File.CreateText(path);
+
+                // Get # of lines in File, setup empty array of lists
+                table = new List<string>[CSVReader.GetLines(filePath)];
+                for (int i = 0; i < CSVReader.GetLines(filePath); i++)
+                {
+                    table[i] = new List<string>();
+                }
+
+                // Load Text from File 
+                CSVReader.LoadFromFile(filePath, new CSVReader.ReadLineDelegate(TableAttempt));
+                // Save Text
+                CSVReader.LoadFromFile(filePath, new CSVReader.ReadLineDelegate(SaveText));
+                outStream.Close();
+                // Load the Resource
+                source = Resources.Load<TextAsset>(endName);
+            }
+        }
+    }
+    #endregion OpenFile & Save
+}
