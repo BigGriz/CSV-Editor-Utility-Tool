@@ -27,7 +27,7 @@ public class GUITable : EditorWindow
         var window = GetWindow<GUITable>();
         // Set Title & Size
         window.titleContent = new GUIContent("CSV Tool");
-        window.minSize = new Vector2(274, 50);
+        window.minSize = new Vector2(544, 30);
     }
     // Setup
     private void OnEnable()
@@ -127,15 +127,26 @@ public class GUITable : EditorWindow
         {
             GUILayout.BeginArea(tableSection);
 
-            float width = 150;
+            
+            float width = EditorWindow.GetWindow<GUITable>().position.width - 290;
 
             for (int i = 0; i < table.Length; i++)
             {
                 GUILayout.BeginHorizontal();
 
-                for (int j = 0; j < table[i].Count; j++)
+                if (i == 0)
                 {
-                    table[i][j] = GUILayout.TextField(table[i][j], GUILayout.Width(width / table[i].Count));
+                    for (int j = 0; j < table[i].Count; j++)
+                    {
+                        GUILayout.Label(table[i][j], GUILayout.Width(width / table[i].Count));
+                    }
+                }
+                else
+                {
+                    for (int j = 0; j < table[i].Count; j++)
+                    {
+                        table[i][j] = GUILayout.TextField(table[i][j], GUILayout.Width(width / table[i].Count));
+                    }
                 }
 
                 GUILayout.EndHorizontal();
@@ -173,6 +184,20 @@ public class GUITable : EditorWindow
 
     public bool loaded = false;
 
+    void SaveSO()
+    {
+        if (source)
+        {
+            string endName = Path.GetFileNameWithoutExtension(AssetDatabase.GetAssetPath(source));
+
+            DataContainer tableSO = ScriptableObject.CreateInstance<DataContainer>();
+            tableSO.SetupTable(table, endName);
+
+            AssetDatabase.CreateAsset(tableSO, "Assets/Tables/" + endName + ".asset");
+            AssetDatabase.SaveAssets();
+        }
+    }
+
     private void SaveText(int line_index, List<string> line)
     {
         string temp = "";
@@ -193,27 +218,32 @@ public class GUITable : EditorWindow
 
     private void SaveTableAsText()
     {
-        // Save file for reading/writing
-        outStream = File.CreateText(path);
-
-        for (int i = 0; i < table.Length; i++)
+        if (source)
         {
-            string temp = "";
-            for (int j = 0; j < table[i].Count; j++)
+            // Save file for reading/writing
+            outStream = File.CreateText(AssetDatabase.GetAssetPath(source));
+
+            for (int i = 0; i < table.Length; i++)
             {
-                if (j != table[i].Count - 1)
+                string temp = "";
+                for (int j = 0; j < table[i].Count; j++)
                 {
-                    temp += table[i][j] + ",";
+                    if (j != table[i].Count - 1)
+                    {
+                        temp += table[i][j] + ",";
+                    }
+                    else
+                    {
+                        temp += table[i][j];
+                    }
+
                 }
-                else
-                {
-                    temp += table[i][j];
-                }
-                
+                outStream.WriteLine(temp);
             }
-            outStream.WriteLine(temp);
+            outStream.Close();
+
+            SaveSO();
         }
-        outStream.Close();
     }
 
     private void OpenFile()
