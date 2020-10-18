@@ -6,10 +6,11 @@ using System.Collections.Generic;
 public class CSVReader
 {
     public delegate void ReadLineDelegate(int line_index, List<string> line);
+    public delegate void StringToEnumValue(int line_index, List<string> line);
 
-    public static void LoadFromFile(string file_name, ReadLineDelegate line_reader)
+    public static void LoadFromFile(string file_name, ReadLineDelegate line_reader, StringToEnumValue string_to_enum)
     {
-        LoadFromString(File.ReadAllText(file_name), line_reader);
+        LoadFromString(File.ReadAllText(file_name), line_reader, string_to_enum);
     }
 
     public static int GetLines(string file_contents)
@@ -17,7 +18,7 @@ public class CSVReader
         return(File.ReadAllLines(file_contents).Length);
     }
 
-    public static void LoadFromString(string file_contents, ReadLineDelegate line_reader)
+    public static void LoadFromString(string file_contents, ReadLineDelegate line_reader, StringToEnumValue string_to_enum)
     {
         int file_length = file_contents.Length;
 
@@ -74,7 +75,14 @@ public class CSVReader
                     {
                         // end of current item
                         cur_line.Add(cur_item.ToString());
+
+                        //if (cur_item.ToString().StartsWith("%"))
+                        {
+                            string_to_enum(cur_line_number, cur_line);
+                        }
+
                         cur_item.Length = 0;
+
                         if (c == '\n' || cur_file_index == file_length)
                         {
                             // also end of line, call line reader
