@@ -10,30 +10,35 @@ using UnityEngine.UIElements;
 public class GUITable : EditorWindow
 {
     // Multiple Tabs
-    List<string> toolbarTags = new List<string>();
+    List<string> toolbarTags;
     int _toolbar_sel = 0;
+    int temp = 0;
+    bool firstTable = true;
 
+    public static GUITable window;
 
     // DataSheet Reference
     public UnityEngine.Object source;
+    public UnityEngine.Object sourceToLoad;
+    public List<UnityEngine.Object> sources;
     // Data Section Styling
     Texture2D dataSectionTexture;
     Rect dataSection;
-    Color dataSectionColor = new Color(0.22f, 0.22f, 0.22f, 1);
+    Color dataSectionColor = new Color(0.3f, 0.3f, 0.3f, 1);
     // Table Section Styling
     Texture2D tableSectionTexture;
     Rect tableSection;
-    Color tableSectionColor = new Color(0.0f, 0.0f, 0.0f, 1);
+    Color tableSectionColor = new Color(0.2f, 0.2f, 0.2f, 1);
     // Toolbar Section Styling
     Texture2D toolbarSectionTexture;
     Rect toolbarSection;
-    Color toolbarSectionColor = new Color(0.0f, 0.0f, 0.0f, 1);
+    Color toolbarSectionColor = new Color(0.25f, 0.25f, 0.25f, 1);
 
     [MenuItem("CSV Tool/Open _%#T")]
     public static void ShowWindow()
     {
         // Reference to new Window
-        var window = GetWindow<GUITable>();
+        window = GetWindow<GUITable>();
         // Set Title & Size
         window.titleContent = new GUIContent("CSV Tool");
         window.minSize = new Vector2(744, 120);
@@ -47,12 +52,29 @@ public class GUITable : EditorWindow
         SetupTable();
         SetupToolbar();
 
+        // Toolbars
+        if (sources == null)
+        {
+            sources = new List<UnityEngine.Object>();
+        }
+        if (toolbarTags == null)
+        {
+            toolbarTags = new List<string>();
+        }
+
         // Safety
         if (dictionary != null)
         {
             dictionary.Clear();
         }
+
+        // Tables
+        table = new List<List<string>[]>();
+        tex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+        tex.SetPixel(0, 0, new Color(0.3f, 0.3f, 0.3f));
+        tex.Apply();
     }
+    #region StylingSections
     void SetupHeader()
     {
         // Header
@@ -74,19 +96,27 @@ public class GUITable : EditorWindow
         toolbarSectionTexture.SetPixel(0, 0, toolbarSectionColor);
         toolbarSectionTexture.Apply();
     }
+    #endregion StylingSections
 
     // Update
     private void OnGUI()
     {
+        DrawBackGround();
         DrawLayouts();
-        DrawHeader();
         DrawToolbar();
-        if (_toolbar_sel == 0)
+        DrawHeader(_toolbar_sel);
+        if (_toolbar_sel >= 0)
         {
             DrawTable();
         }
     }
 
+    #region DrawCalls
+    Texture2D tex;
+    void DrawBackGround()
+    {
+        GUI.DrawTexture(new Rect(0, 0, maxSize.x, maxSize.y), tex, ScaleMode.StretchToFill);
+    }
     // Define Rect Values
     void DrawLayouts()
     {
@@ -97,40 +127,39 @@ public class GUITable : EditorWindow
         GUI.DrawTexture(dataSection, dataSectionTexture);
 
         tableSection.x = 274;
-        tableSection.y = 52;
+        tableSection.y = 22;
         tableSection.width = Screen.width - tableSection.x - 2;
-        tableSection.height = 500.0f;
+        tableSection.height = Screen.height - toolbarSection.y - 2;
         GUI.DrawTexture(tableSection, tableSectionTexture);
 
         toolbarSection.x = 274;
         toolbarSection.y = 0;
         toolbarSection.width = Screen.width - toolbarSection.x - 2;
-        toolbarSection.height = 120.0f;
+        toolbarSection.height = 22.0f;
         GUI.DrawTexture(toolbarSection, toolbarSectionTexture);
     }
-
     void DrawToolbar()
     {
         GUILayout.BeginArea(toolbarSection);
-
-        GUILayout.BeginHorizontal();
-
-        GUILayout.Space(6);
-        _toolbar_sel = GUILayout.Toolbar(_toolbar_sel, toolbarTags.ToArray(), GUILayout.Width(250));
-
-        GUILayout.EndHorizontal();
-
+            GUILayout.Space(2);
+            GUILayout.BeginHorizontal();
+                GUILayout.Space(28);
+                _toolbar_sel = GUILayout.Toolbar(_toolbar_sel, toolbarTags.ToArray(), GUILayout.Width(58 * toolbarTags.Count));
+                if (sources.Count != 0)
+                {
+                    source = sources[_toolbar_sel];
+                }
+            GUILayout.EndHorizontal();
         GUILayout.EndArea();
     }
-    
-    void DrawHeader()
+    void DrawHeader(int _sel)
     {
         // basically start working in this gui area
         GUILayout.BeginArea(dataSection);
 
         EditorGUILayout.BeginHorizontal();
         GUILayout.Label("DataSheet");
-        source = EditorGUILayout.ObjectField(source, typeof(TextAsset), true, GUILayout.Width(150));
+        sourceToLoad = EditorGUILayout.ObjectField(sourceToLoad, typeof(TextAsset), false, GUILayout.Width(150));
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.BeginHorizontal();
@@ -154,6 +183,12 @@ public class GUITable : EditorWindow
             {
                 SaveFile();
             }
+
+            // Don't need to show this one
+            /*EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Current DataSheet");
+            source = EditorGUILayout.ObjectField(source, typeof(TextAsset), true, GUILayout.Width(150));
+            EditorGUILayout.EndHorizontal();*/
         }
 
         if (!source)
@@ -163,25 +198,44 @@ public class GUITable : EditorWindow
         // stop working in this gui area
         GUILayout.EndArea();
     }
+    #endregion DrawCalls
 
     void LoadTable()
     {
-        if (source)
+        if (sourceToLoad)
         {
-            // Get # of lines in File, setup empty array of lists
-            table = new List<string>[CSVReader.GetLines(AssetDatabase.GetAssetPath(source))];
-            for (int i = 0; i < CSVReader.GetLines(AssetDatabase.GetAssetPath(source)); i++)
+            temp = _toolbar_sel;
+
+            if (!toolbarTags.Contains(sourceToLoad.name))
             {
-                table[i] = new List<string>();
+                toolbarTags.Add(sourceToLoad.name);
+
+                // Move pointer forward -- need to move this down but temp
+                if (!firstTable)
+                {
+                    temp++;
+                }
+                else
+                {
+                    firstTable = false;
+                }
+            }
+
+            string tempPath = AssetDatabase.GetAssetPath(sourceToLoad);
+
+            // Get # of lines in File, setup empty array of lists
+            table.Add(new List<string>[CSVReader.GetLines(tempPath)]);
+            for (int i = 0; i < CSVReader.GetLines(tempPath); i++)
+            {
+                table[temp][i] = new List<string>();
             }
 
             loaded = true;
-            CSVReader.LoadFromFile(AssetDatabase.GetAssetPath(source), new CSVReader.ReadLineDelegate(TableAttempt), new CSVReader.StringToEnumValue(AddEnumValue));
+            CSVReader.LoadFromFile(tempPath, new CSVReader.ReadLineDelegate(TableAttempt), new CSVReader.StringToEnumValue(AddEnumValue));
 
-            if (!toolbarTags.Contains(source.name))
-            {
-                toolbarTags.Add(source.name);
-            }
+            sources.Add(sourceToLoad);
+            source = sourceToLoad;
+            sourceToLoad = null;
         }
     }
 
@@ -231,19 +285,20 @@ public class GUITable : EditorWindow
         if (source && loaded)
         {
             GUILayout.BeginArea(tableSection);
+            GUILayout.Space(2);
 
-            float width = EditorWindow.GetWindow<GUITable>().position.width - 290 - 20;
+            float width = window.position.width - 290 - 24;
 
-            for (int i = 0; i < table.Length; i++)
+            for (int i = 0; i < table[_toolbar_sel].Length; i++)
             {
                 if (i == 0)
                 {                   
                     GUILayout.BeginHorizontal();
 
                     GUILayout.Space(26);
-                    for (int j = 0; j < table[i].Count; j++)
+                    for (int j = 0; j < table[_toolbar_sel][i].Count; j++)
                     {
-                        if (GUILayout.Button("-", GUILayout.Width((width - 30) / table[i].Count), GUILayout.Height(20)))
+                        if (GUILayout.Button("-", GUILayout.Width((width - 30) / table[_toolbar_sel][i].Count), GUILayout.Height(20)))
                         {
                             RemoveColumnFromTable(j);
                         }
@@ -260,25 +315,25 @@ public class GUITable : EditorWindow
                 {                   
                     RemoveLineFromTable(i);
                 }
-                for (int j = 0; j < table[i].Count; j++)
+                for (int j = 0; j < table[_toolbar_sel][i].Count; j++)
                 {
                     if (dictionary.ContainsKey(j) && i != 0)
                     {
                         string[] tempArray = dictionary[j].ToArray();
-                        int tempIndex = Array.FindIndex(tempArray, element => element == table[i][j]);
+                        int tempIndex = Array.FindIndex(tempArray, element => element == table[_toolbar_sel][i][j]);
                         // Trim % from Start - Shouldn't be too performance heavy
                         for (int k = 0; k < tempArray.Length; k++)
                         {
                             tempArray[k] = tempArray[k].Remove(0, 1);
                         }
 
-                        tempIndex = EditorGUILayout.Popup(tempIndex, tempArray, GUILayout.Width((width - 30) / table[i].Count));
+                        tempIndex = EditorGUILayout.Popup(tempIndex, tempArray, GUILayout.Width((width - 30) / table[_toolbar_sel][i].Count));
 
-                        table[i][j] = dictionary[j][tempIndex];
+                        table[_toolbar_sel][i][j] = dictionary[j][tempIndex];
                     }
                     else
                     {
-                        table[i][j] = GUILayout.TextField(table[i][j], GUILayout.Width((width - 30) / table[i].Count));
+                        table[_toolbar_sel][i][j] = GUILayout.TextField(table[_toolbar_sel][i][j], GUILayout.Width((width - 30) / table[_toolbar_sel][i].Count));
                     }
                 }
                 GUILayout.EndHorizontal();
@@ -299,85 +354,84 @@ public class GUITable : EditorWindow
     {
         for (int i = 0; i < line.Count; i++)
         {
-            if (table[line_index].Count <= i)
+            if (table[temp][line_index].Count <= i)
             {
-                table[line_index].Add(line[i]);
+                table[temp][line_index].Add(line[i]);
             }
             else
             {
-                table[line_index][i] = line[i];
+                table[temp][line_index][i] = line[i];
             }
         }
     }
 
+    #region Add/Remove Rows & Columns
     void AddLineToTable()
     {
-        List<string>[] temp = new List<string>[table.Length + 1];
+        List<string>[] temp = new List<string>[table[_toolbar_sel].Length + 1];
         
-        for (int i = 0; i <= table.Length; i++)
+        for (int i = 0; i <= table[_toolbar_sel].Length; i++)
         {
-            if (i == table.Length)
+            if (i == table[_toolbar_sel].Length)
             {
                 temp[i] = new List<string>();
-                for (int j = 0; j < table[0].Count; j++)
+                for (int j = 0; j < table[_toolbar_sel][0].Count; j++)
                 {
                     temp[i].Add("");
                 }
             }
             else
             {
-                temp[i] = table[i];
+                temp[i] = table[_toolbar_sel][i];
             }
         }
 
-        table = temp;
+        table[_toolbar_sel] = temp;
     }
-
     void RemoveLineFromTable(int _row)
     {
-        List<string>[] temp = new List<string>[table.Length - 1];
+        List<string>[] temp = new List<string>[table[_toolbar_sel].Length - 1];
 
-        for (int i = 0; i < table.Length; i++)
+        for (int i = 0; i < table[_toolbar_sel].Length; i++)
         {
             if (i < _row)
             {
-                temp[i] = table[i];
+                temp[i] = table[_toolbar_sel][i];
             }
             else if (i > _row)
             {
-                temp[i - 1] = table[i];
+                temp[i - 1] = table[_toolbar_sel][i];
             }
         }
-        table = temp;
-    }
-        
+        table[_toolbar_sel] = temp;
+    }      
     void AddColumnToTable()
     {
-        List<string>[] temp = new List<string>[table.Length];
+        List<string>[] temp = new List<string>[table[_toolbar_sel].Length];
 
-        for (int i = 0; i < table.Length; i++)
+        for (int i = 0; i < table[_toolbar_sel].Length; i++)
         {
-            temp[i] = table[i];
+            temp[i] = table[_toolbar_sel][i];
             temp[i].Add("");
         }
 
-        table = temp;
+        table[_toolbar_sel] = temp;
     }
-
     void RemoveColumnFromTable(int _column)
     {
-        List<string>[] temp = new List<string>[table.Length];
+        List<string>[] temp = new List<string>[table[_toolbar_sel].Length];
 
-        for (int i = 0; i < table.Length; i++)
+        for (int i = 0; i < table[_toolbar_sel].Length; i++)
         {
-            temp[i] = table[i];
+            temp[i] = table[_toolbar_sel][i];
             temp[i].RemoveAt(_column);
         }
-        table = temp;
+        table[_toolbar_sel] = temp;
     }
+    #endregion Add/Remove Rows & Columns
 
     // Table Container
-    public List<string>[] table;
+    public List<List<string>[]> table;
 
     #region OpenFile & Save
     public StreamWriter outStream;
@@ -392,7 +446,7 @@ public class GUITable : EditorWindow
             string endName = Path.GetFileNameWithoutExtension(AssetDatabase.GetAssetPath(source));
 
             DataContainer tableSO = ScriptableObject.CreateInstance<DataContainer>();
-            tableSO.SetupTable(table, endName);
+            tableSO.SetupTable(table[_toolbar_sel], endName);
 
             AssetDatabase.CreateAsset(tableSO, "Assets/Tables/" + endName + ".asset");
             AssetDatabase.SaveAssets();
@@ -401,20 +455,20 @@ public class GUITable : EditorWindow
 
     private void SaveText(int line_index, List<string> line)
     {
-        string temp = "";
+        string tempText = "";
 
         for (int i = 0; i < line.Count; i++)
         {
             if (i != line.Count - 1)
             {
-                temp += line[i] + ",";
+                tempText += line[i] + ",";
             }
             else
             {
-                temp += line[i];
+                tempText += line[i];
             }
         }
-        outStream.WriteLine(temp);
+        outStream.WriteLine(tempText);
     }
 
     private void SaveTableAsText()
@@ -424,18 +478,18 @@ public class GUITable : EditorWindow
             // Save file for reading/writing
             outStream = File.CreateText(AssetDatabase.GetAssetPath(source));
 
-            for (int i = 0; i < table.Length; i++)
+            for (int i = 0; i < table[_toolbar_sel].Length; i++)
             {
                 string temp = "";
-                for (int j = 0; j < table[i].Count; j++)
+                for (int j = 0; j < table[_toolbar_sel][i].Count; j++)
                 {
-                    if (j != table[i].Count - 1)
+                    if (j != table[_toolbar_sel][i].Count - 1)
                     {
-                        temp += table[i][j] + ",";
+                        temp += table[_toolbar_sel][i][j] + ",";
                     }
                     else
                     {
-                        temp += table[i][j];
+                        temp += table[_toolbar_sel][i][j];
                     }
 
                 }
@@ -465,11 +519,30 @@ public class GUITable : EditorWindow
                 path = savePath + endName + ".txt";
                 outStream = File.CreateText(path);
 
+                temp = _toolbar_sel;
+
+                // If new Source add Toolbar
+                if (!toolbarTags.Contains(endName))
+                {
+                    toolbarTags.Add(endName);
+                    // Check if this is the first table loaded
+                    if (!firstTable)
+                    {
+                        // If not, move the selection num forward
+                        temp++;
+                    }
+                    else
+                    {
+                        // else mark as first loaded
+                        firstTable = false;
+                    }
+                }
+
                 // Get # of lines in File, setup empty array of lists
-                table = new List<string>[CSVReader.GetLines(filePath)];
+                table.Add(new List<string>[CSVReader.GetLines(filePath)]);
                 for (int i = 0; i < CSVReader.GetLines(filePath); i++)
                 {
-                    table[i] = new List<string>();
+                    table[temp][i] = new List<string>();
                 }
 
                 // Load Text from File 
@@ -480,6 +553,7 @@ public class GUITable : EditorWindow
 
                 // Load the Resource
                 source = Resources.Load<TextAsset>(endName);
+                sources.Add(source);
 
                 if (!source)
                 {
@@ -489,11 +563,6 @@ public class GUITable : EditorWindow
 
                 loaded = true;
             }
-
-            if (!toolbarTags.Contains(source.name))
-            {
-                toolbarTags.Add(source.name);
-            }
         }
     }
 
@@ -501,24 +570,24 @@ public class GUITable : EditorWindow
     {
         if (source)
         {
-            var filePath = EditorUtility.SaveFilePanel("Save Datasheet", "", source.name, ".csv");
+            var filePath = EditorUtility.SaveFilePanel("Save Datasheet", "", source.name, "csv");
             if (filePath.Length != 0)
             {
                 // Save as CSV
                 outStream = File.CreateText(filePath);
 
-                for (int i = 0; i < table.Length; i++)
+                for (int i = 0; i < table[_toolbar_sel].Length; i++)
                 {
                     string temp = "";
-                    for (int j = 0; j < table[i].Count; j++)
+                    for (int j = 0; j < table[_toolbar_sel][i].Count; j++)
                     {
-                        if (j != table[i].Count - 1)
+                        if (j != table[_toolbar_sel][i].Count - 1)
                         {
-                            temp += table[i][j] + ",";
+                            temp += table[_toolbar_sel][i][j] + ",";
                         }
                         else
                         {
-                            temp += table[i][j];
+                            temp += table[_toolbar_sel][i][j];
                         }
 
                     }

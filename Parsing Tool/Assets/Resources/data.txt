@@ -1,4 +1,4 @@
 Name,ManaCost,Damage,CastSpeed,Crit,Channeled,TargetingType
 Frostbolt,10,35,2.2,0.5,%yes,%single
 Fireball,20,50,1.5,0.2,%no,%aoe
-Lightning Strike,15,15,3,0.8,%no,%line
+THIS IS DATASHEET,15,15,3,0.8,%no,%line
