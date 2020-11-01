@@ -319,12 +319,22 @@ public class GUITable : EditorWindow
                 {
                     if (dictionary.ContainsKey(j) && i != 0)
                     {
+                        // Check if new Row Added
+                        if (!dictionary[j].Contains(table[_toolbar_sel][i][j]))
+                        {
+                            // If so add the value to the list
+                            dictionary[j].Add(table[_toolbar_sel][i][j]);
+                        }
+
                         string[] tempArray = dictionary[j].ToArray();
                         int tempIndex = Array.FindIndex(tempArray, element => element == table[_toolbar_sel][i][j]);
                         // Trim % from Start - Shouldn't be too performance heavy
                         for (int k = 0; k < tempArray.Length; k++)
                         {
-                            tempArray[k] = tempArray[k].Remove(0, 1);
+                            if (tempArray[k].Length > 0)
+                            {
+                                tempArray[k] = tempArray[k].Remove(0, 1);
+                            }
                         }
 
                         tempIndex = EditorGUILayout.Popup(tempIndex, tempArray, GUILayout.Width((width - 30) / table[_toolbar_sel][i].Count));
